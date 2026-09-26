@@ -1,8 +1,8 @@
 # 内存卫士网站部署
 
-版本 0.6.2，目标：https://www.xiaopuwa.com/memory-guardian/
+版本 0.6.3，目标：https://www.xiaopuwa.com/memory-guardian/
 
-解压 MemoryGuardian-0.6.2-website.zip，将 memory-guardian 文件夹整体上传到网站根目录。确保为 memory-guardian/index.html，不要套两层目录。
+解压 MemoryGuardian-0.6.3-website.zip，将 memory-guardian 文件夹整体上传到网站根目录。确保为 memory-guardian/index.html，不要套两层目录。
 
 目录仅包含网页、assets 资源及 downloads 内的最新版安装包。源码、免安装版、许可证和校验值通过 GitHub 提供：https://github.com/syq10086/MemoryGuardian
 

@@ -200,7 +200,7 @@ internal class Program
             var request = Branding.CreateHomepageRequest();
             Check(request.UseShellExecute && request.FileName == "https://blog.csdn.net/syq10086?type=blog", "author homepage opens exact URL in default browser");
             Check(window.Title.StartsWith("内存卫士"), "new product name is displayed");
-            Check(Branding.Version == "0.6.2", "about version comes from built assembly");
+            Check(Branding.Version == "0.6.3", "about version comes from built assembly");
             var downloadRequest = Branding.CreateDownloadRequest();
             Check(downloadRequest.UseShellExecute && downloadRequest.FileName == "https://www.xiaopuwa.com/memory-guardian/", "update link opens product download page in default browser");
             bool hasDownload = false;

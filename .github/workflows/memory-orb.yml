@@ -23,4 +23,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: MemoryGuardian-windows
-          path: artifacts/earth-release-0.6.2/
+          path: artifacts/earth-release-0.6.3/

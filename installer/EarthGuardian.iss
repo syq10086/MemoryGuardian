@@ -1,9 +1,9 @@
 ; Earth Guardian installer. SPDX-License-Identifier: GPL-3.0-only
 #ifndef AppVersion
-  #define AppVersion "0.6.2"
+  #define AppVersion "0.6.3"
 #endif
 #ifndef SourceDir
-  #define SourceDir "..\artifacts\earth-release-0.6.2"
+  #define SourceDir "..\artifacts\earth-release-0.6.3"
 #endif
 #ifndef OutputDir
   #define OutputDir "..\artifacts\installer"
@@ -65,7 +65,9 @@ Name: "{autoprograms}\内存卫士\更新与下载"; Filename: "https://www.xiao
 Name: "{autoprograms}\内存卫士\卸载内存卫士"; Filename: "{uninstallexe}"
 
 [Run]
-Filename: "{app}\EarthGuardian.exe"; Description: "运行内存卫士"; Flags: postinstall nowait skipifsilent unchecked
+; postinstall normally launches as the original user. ShellExecute with runas
+; honors the application's administrator manifest instead of failing with 740.
+Filename: "{app}\EarthGuardian.exe"; WorkingDir: "{app}"; Verb: "runas"; Description: "运行内存卫士（需要管理员权限）"; Flags: shellexec postinstall nowait skipifsilent unchecked
 
 [Code]
 // On upgrade, remove a legacy shortcut only if it points to this installation.
