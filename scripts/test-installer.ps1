@@ -1,7 +1,7 @@
 ﻿param([string]$Setup = '')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-if (-not $Setup) { $Setup = Join-Path $root 'artifacts\installer\MemoryGuardian-0.6.0-Setup.exe' }
+if (-not $Setup) { $Setup = Join-Path $root 'artifacts\installer\MemoryGuardian-0.6.1-Setup.exe' }
 $target = [IO.Path]::GetFullPath((Join-Path $root 'tmp\installer-smoke'))
 $expected = [IO.Path]::GetFullPath((Join-Path $root 'tmp\installer-smoke'))
 if ($target -ne $expected -or (Test-Path -LiteralPath $target)) { throw 'Smoke target must be a fresh isolated directory.' }

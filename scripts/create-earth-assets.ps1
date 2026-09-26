@@ -1,4 +1,4 @@
-# Rebuild the original texture and icon from public-domain Natural Earth land geometry.
+﻿# Rebuild the original texture and icon from public-domain Natural Earth land geometry.
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $assets = Join-Path (Split-Path -Parent $PSScriptRoot) 'orb\Assets'

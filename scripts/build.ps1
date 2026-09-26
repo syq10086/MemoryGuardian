@@ -1,4 +1,4 @@
-param([string]$Dotnet = 'dotnet', [switch]$Preview)
+﻿param([string]$Dotnet = 'dotnet', [switch]$Preview)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $version = ([xml](Get-Content -LiteralPath (Join-Path $root 'orb\MemoryOrb.csproj') -Raw -Encoding UTF8)).Project.PropertyGroup.Version

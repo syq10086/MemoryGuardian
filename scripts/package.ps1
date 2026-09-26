@@ -1,4 +1,4 @@
-param([string]$Dotnet = 'dotnet')
+﻿param([string]$Dotnet = 'dotnet')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 & (Join-Path $PSScriptRoot 'build.ps1') -Dotnet $Dotnet

@@ -1,19 +1,19 @@
-param()
+﻿param()
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $version = ([xml](Get-Content -LiteralPath (Join-Path $root 'orb\MemoryOrb.csproj') -Raw -Encoding UTF8)).Project.PropertyGroup.Version
-$site = Join-Path $root 'website\earth-guardian'
+$site = Join-Path $root 'website\memory-guardian'
 $downloads = Join-Path $site 'downloads'
 New-Item -ItemType Directory -Path $downloads -Force | Out-Null
-foreach ($relative in @("installer\MemoryGuardian-$version-Setup.exe", "MemoryGuardian-$version-windows.zip", "MemoryGuardian-$version-source.zip")) {
+foreach ($relative in @("installer\MemoryGuardian-$version-Setup.exe")) {
     $source = Join-Path (Join-Path $root 'artifacts') $relative
     if (-not (Test-Path -LiteralPath $source)) { throw "Build and package the application first: $source" }
     Copy-Item -LiteralPath $source -Destination $downloads -Force
 }
-Copy-Item -LiteralPath (Join-Path $root 'LICENSE'),(Join-Path $root 'NOTICE.md') -Destination $downloads -Force
-$published = @("MemoryGuardian-$version-Setup.exe", "MemoryGuardian-$version-windows.zip", "MemoryGuardian-$version-source.zip", 'LICENSE', 'NOTICE.md')
-$published | ForEach-Object { Get-FileHash -LiteralPath (Join-Path $downloads $_) -Algorithm SHA256 } | ForEach-Object { $_.Hash + '  ' + [IO.Path]::GetFileName($_.Path) } | Set-Content -LiteralPath (Join-Path $downloads 'SHA256SUMS.txt') -Encoding ASCII
-$published += 'SHA256SUMS.txt'
+$published = @("MemoryGuardian-$version-Setup.exe")
+foreach ($file in Get-ChildItem -LiteralPath $downloads -File) {
+    if ($published -notcontains $file.Name) { throw "Remove obsolete download before packaging: $($file.FullName)" }
+}
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $output = Join-Path $root "artifacts\MemoryGuardian-$version-website.zip"
@@ -23,8 +23,7 @@ try {
     foreach ($file in Get-ChildItem -LiteralPath $site -Recurse -File) {
         $relative = $file.FullName.Substring($site.Length).TrimStart('\').Replace('\','/')
         if ($relative.StartsWith('downloads/') -and $published -notcontains $file.Name) { continue }
-        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,$file.FullName,'earth-guardian/' + $relative,[IO.Compression.CompressionLevel]::Optimal) | Out-Null
+        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,$file.FullName,'memory-guardian/' + $relative,[IO.Compression.CompressionLevel]::Optimal) | Out-Null
     }
-    [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,(Join-Path $root 'website\DEPLOY.md'),'DEPLOY.md',[IO.Compression.CompressionLevel]::Optimal) | Out-Null
 } finally { $archive.Dispose(); $stream.Dispose() }
 Write-Output "Upload package: $output"

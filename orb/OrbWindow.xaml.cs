@@ -109,6 +109,9 @@ namespace MemoryOrb
             var homepage = new MenuItem { Header = "作者主页 ↗", ToolTip = Branding.AuthorHomepage };
             homepage.Click += (s, e) => OpenAuthorHomepage();
             menu.Items.Add(homepage);
+            var github = new MenuItem { Header = "GitHub 项目源码 ↗", ToolTip = Branding.GitHubRepository };
+            github.Click += (s, e) => OpenGitHub();
+            menu.Items.Add(github);
             var download = new MenuItem { Header = "更新与下载 ↗", ToolTip = Branding.DownloadPage };
             download.Click += (s, e) => OpenDownloadPage();
             menu.Items.Add(download);
@@ -335,6 +338,11 @@ namespace MemoryOrb
             try { Process.Start(Branding.CreateHomepageRequest()); }
             catch (Exception ex) { App.WriteError(ex); ShowBadge("无法打开浏览器", true); }
         }
+        private void OpenGitHub()
+        {
+            try { Process.Start(Branding.CreateGitHubRequest()); }
+            catch (Exception ex) { App.WriteError(ex); ShowBadge("无法打开 GitHub，请稍后重试", true); }
+        }
         private void OpenDownloadPage()
         {
             try { Process.Start(Branding.CreateDownloadRequest()); }
@@ -434,6 +442,9 @@ namespace MemoryOrb
             var authorButton = new Button { Content = "作者主页 · 宋域强 ↗", ToolTip = Branding.AuthorHomepage, Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 0, 0, 8) };
             authorButton.Click += (s, e) => OpenAuthorHomepage();
             panel.Children.Add(authorButton);
+            var githubButton = new Button { Content = "GitHub · syq10086 / MemoryGuardian ↗", ToolTip = Branding.GitHubRepository, Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 0, 0, 8) };
+            githubButton.Click += (s, e) => OpenGitHub();
+            panel.Children.Add(githubButton);
             var downloadButton = new Button { Content = "更新与下载 · 内存卫士 ↗", ToolTip = Branding.DownloadPage, Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 0, 0, 6) };
             downloadButton.Click += (s, e) => OpenDownloadPage();
             panel.Children.Add(downloadButton);

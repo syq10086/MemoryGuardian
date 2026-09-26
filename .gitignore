@@ -5,6 +5,6 @@
 *.user
 *.suo
 artifacts/
-website/earth-guardian/downloads/
+website/memory-guardian/downloads/
 tmp/
 *.log

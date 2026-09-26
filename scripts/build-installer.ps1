@@ -1,4 +1,4 @@
-param([string]$Dotnet = 'dotnet', [string]$Iscc = '')
+﻿param([string]$Dotnet = 'dotnet', [string]$Iscc = '')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 if (-not $Iscc) {

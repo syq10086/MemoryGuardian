@@ -200,9 +200,9 @@ internal class Program
             var request = Branding.CreateHomepageRequest();
             Check(request.UseShellExecute && request.FileName == "https://blog.csdn.net/syq10086?type=blog", "author homepage opens exact URL in default browser");
             Check(window.Title.StartsWith("内存卫士"), "new product name is displayed");
-            Check(Branding.Version == "0.6.0", "about version comes from built assembly");
+            Check(Branding.Version == "0.6.1", "about version comes from built assembly");
             var downloadRequest = Branding.CreateDownloadRequest();
-            Check(downloadRequest.UseShellExecute && downloadRequest.FileName == "https://www.xiaopuwa.com/earth-guardian/", "update link opens product download page in default browser");
+            Check(downloadRequest.UseShellExecute && downloadRequest.FileName == "https://www.xiaopuwa.com/memory-guardian/", "update link opens product download page in default browser");
             bool hasDownload = false;
             foreach (object entry in button.ContextMenu.Items)
                 if (entry is MenuItem item && (item.Header as string) == "更新与下载 ↗" && (item.ToolTip as string) == Branding.DownloadPage) hasDownload = true;

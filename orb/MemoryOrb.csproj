@@ -8,7 +8,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>EarthGuardian</AssemblyName>
     <RootNamespace>MemoryOrb</RootNamespace>
-    <Version>0.6.0</Version>
+    <Version>0.6.1</Version>
     <Product>内存卫士</Product>
     <Title>内存卫士</Title>
     <Description>内存卫士 — 3D 地球悬浮内存工具，基于 Windows Memory Cleaner</Description>

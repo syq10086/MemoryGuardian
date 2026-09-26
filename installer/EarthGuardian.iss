@@ -1,9 +1,9 @@
 ; Earth Guardian installer. SPDX-License-Identifier: GPL-3.0-only
 #ifndef AppVersion
-  #define AppVersion "0.6.0"
+  #define AppVersion "0.6.1"
 #endif
 #ifndef SourceDir
-  #define SourceDir "..\artifacts\earth-release-0.6.0"
+  #define SourceDir "..\artifacts\earth-release-0.6.1"
 #endif
 #ifndef OutputDir
   #define OutputDir "..\artifacts\installer"
@@ -17,7 +17,7 @@ AppVerName=内存卫士 {#AppVersion}
 AppPublisher=宋域强
 AppPublisherURL=https://blog.csdn.net/syq10086?type=blog
 AppSupportURL=https://blog.csdn.net/syq10086?type=blog
-AppUpdatesURL=https://www.xiaopuwa.com/earth-guardian/
+AppUpdatesURL=https://www.xiaopuwa.com/memory-guardian/
 DefaultDirName={autopf}\EarthGuardian
 DefaultGroupName=内存卫士
 DisableProgramGroupPage=yes
@@ -61,7 +61,7 @@ Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{autodesktop}\内存卫士"; Filename: "{app}\EarthGuardian.exe"; WorkingDir: "{app}"; IconFilename: "{app}\EarthGuardian.exe"; Tasks: desktopicon
 Name: "{autoprograms}\内存卫士\内存卫士"; Filename: "{app}\EarthGuardian.exe"; WorkingDir: "{app}"
 Name: "{autoprograms}\内存卫士\作者主页"; Filename: "https://blog.csdn.net/syq10086?type=blog"
-Name: "{autoprograms}\内存卫士\更新与下载"; Filename: "https://www.xiaopuwa.com/earth-guardian/"
+Name: "{autoprograms}\内存卫士\更新与下载"; Filename: "https://www.xiaopuwa.com/memory-guardian/"
 Name: "{autoprograms}\内存卫士\卸载内存卫士"; Filename: "{uninstallexe}"
 
 [Run]

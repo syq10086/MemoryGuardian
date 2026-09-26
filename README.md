@@ -1,12 +1,14 @@
+**0.6.1 更新**：右键菜单和关于窗口加入 GitHub 项目入口，下载网站迁至 https://www.xiaopuwa.com/memory-guardian/；网站仅包含页面资源和最新版安装包，源码由 GitHub 提供。
+
 # 内存卫士 · Memory Guardian
 
 **维护者：宋域强（GitHub：[@syq10086](https://github.com/syq10086)）** · 公众号 / 抖音：宋域强
 
 [下载安装包](https://github.com/syq10086/MemoryGuardian/releases/latest) · [项目源码](https://github.com/syq10086/MemoryGuardian) · [作者主页](https://blog.csdn.net/syq10086?type=blog)
 
-**0.6.0 更新**：软件更名为“内存卫士”，保留 3D 地球。低占用为蓝色，50% 以上逐渐变暖，95% 及以上为红色；读取失败保留最后一次颜色。右键菜单和“关于”新增“更新与下载”，指向 `https://www.xiaopuwa.com/earth-guardian/`。开发者、公众号、抖音：宋域强。保留原有自动清理规则及倒计时。退出旧版后再安装新版。
+**0.6.1 更新**：软件更名为“内存卫士”，保留 3D 地球。低占用为蓝色，50% 以上逐渐变暖，95% 及以上为红色；读取失败保留最后一次颜色。右键菜单和“关于”新增“更新与下载”，指向 `https://www.xiaopuwa.com/memory-guardian/`。开发者、公众号、抖音：宋域强。保留原有自动清理规则及倒计时。退出旧版后再安装新版。
 
-内部 EXE 仍为 `EarthGuardian.exe`，沿用安装标识、配置目录和登录任务，方便升级并保留设置。公开下载包使用 `MemoryGuardian-0.6.0-*` 名称。网站位于 `website/earth-guardian/`；部署见 `website/DEPLOY.md`，上传包由 `scripts/package-site.ps1` 生成。
+内部 EXE 仍为 `EarthGuardian.exe`，沿用安装标识、配置目录和登录任务，方便升级并保留设置。公开下载包使用 `MemoryGuardian-0.6.1-*` 名称。网站位于 `website/memory-guardian/`；部署见 `website/DEPLOY.md`，上传包由 `scripts/package-site.ps1` 生成。
 
 一个只显示悬浮球的 Windows 内存清理工具。基于 [Windows Memory Cleaner](https://github.com/IgorMundstein/WinMemoryCleaner) 二次开发，使用 **GNU GPL v3**。
 
@@ -16,7 +18,7 @@
 
 ### 安装版（推荐）
 
-运行 `MemoryGuardian-0.6.0-Setup.exe`，按中文向导选择安装目录，保留默认勾选的“创建桌面快捷方式”。安装完成后，桌面及开始菜单会出现“内存卫士”。也可在完成页面勾选立即运行。
+运行 `MemoryGuardian-0.6.1-Setup.exe`，按中文向导选择安装目录，保留默认勾选的“创建桌面快捷方式”。安装完成后，桌面及开始菜单会出现“内存卫士”。也可在完成页面勾选立即运行。
 
 安装包默认需要管理员授权，安装到 Program Files。应用本身清理内存也需要管理员权限。安装前会检查 .NET Framework 4.8.1；缺少时提示从微软官网下载，不会隐式安装其他组件。安装不会强制开启登录启动。
 
@@ -87,7 +89,7 @@
 ./scripts/build-installer.ps1 -Dotnet 'C:\path\to\dotnet.exe' -Iscc 'C:\path\to\ISCC.exe'
 ```
 
-输出为 `artifacts/installer/MemoryGuardian-0.6.0-Setup.exe`。安装脚本和中文语言文件位于 `installer/`，均包含在源码包中。中文语言文件来自 Inno Setup 官方源码仓库，原译者信息保留在文件头。
+输出为 `artifacts/installer/MemoryGuardian-0.6.1-Setup.exe`。安装脚本和中文语言文件位于 `installer/`，均包含在源码包中。中文语言文件来自 Inno Setup 官方源码仓库，原译者信息保留在文件头。
 
 安装 .NET SDK 8 和 .NET Framework 4.8.1 Developer Pack（或包含它的 Visual Studio Build Tools）。
 
@@ -95,7 +97,7 @@
 powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
-产物位于 `artifacts/earth-release-0.6.0/EarthGuardian.exe`。运行时依赖 Windows 的 .NET Framework 4.8.1，不需要安装 .NET 8 运行时。该项目不含第三方运行时库。
+产物位于 `artifacts/earth-release-0.6.1/EarthGuardian.exe`。运行时依赖 Windows 的 .NET Framework 4.8.1，不需要安装 .NET 8 运行时。该项目不含第三方运行时库。
 
 指定 SDK：
 
@@ -107,7 +109,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 
 ```powershell
 ./scripts/build.ps1 -Preview
-./artifacts/earth-preview-0.6.0/EarthGuardian.exe --demo
+./artifacts/earth-preview-0.6.1/EarthGuardian.exe --demo
 ```
 
 `--demo` 读取真实内存占用，但点击仅播放动画，会明确显示“演示完成 · 未执行清理”；不保存设置、不修改登录启动、不执行自动清理。预览构建仅供测试；正式发布请用正常构建。
@@ -121,7 +123,7 @@ dotnet build tests/MemoryOrb.Tests.csproj -c Release
 
 无第三方测试框架的检查程序覆盖自动清理阈值与冷却、并发保护、错误恢复、设置读写及损坏恢复、真实 Windows 内存读取、WPF 透明窗口、菜单、演示异步流程、动画结束和内嵌许可证。
 
-检查程序包含 60 项检查。管理员权限下的真实清理、计划任务启停以及不同缩放比例的多显示器组合，需要在发布前进行人工实机验收；这些行为不能仅凭界面演示认定通过。详见 [验收记录](docs/VALIDATION.md)。
+检查程序包含 82 项检查。管理员权限下的真实清理、计划任务启停以及不同缩放比例的多显示器组合，需要在发布前进行人工实机验收；这些行为不能仅凭界面演示认定通过。详见 [验收记录](docs/VALIDATION.md)。
 
 ## 作者主页与版本 0.2.0
 

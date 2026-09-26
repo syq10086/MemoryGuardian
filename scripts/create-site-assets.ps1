@@ -2,7 +2,7 @@
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $root = Split-Path -Parent $PSScriptRoot
-$assets = Join-Path $root 'website\earth-guardian\assets'
+$assets = Join-Path $root 'website\memory-guardian\assets'
 if (-not $Portrait) { $Portrait = Join-Path $assets 'song-yuqiang.jpg' }
 Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
 using System;
