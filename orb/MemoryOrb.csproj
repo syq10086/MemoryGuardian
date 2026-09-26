@@ -8,7 +8,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>EarthGuardian</AssemblyName>
     <RootNamespace>MemoryOrb</RootNamespace>
-    <Version>0.6.1</Version>
+    <Version>0.6.2</Version>
     <Product>内存卫士</Product>
     <Title>内存卫士</Title>
     <Description>内存卫士 — 3D 地球悬浮内存工具，基于 Windows Memory Cleaner</Description>
@@ -24,6 +24,7 @@
     <Compile Include="..\src\Core\Structs.cs" Link="Upstream\Structs.cs" />
     <Resource Include="Assets\EarthGuardian.ico" />
     <Resource Include="Assets\earth-map.png" />
+    <Resource Include="Assets\wechat-support.jpg" />
     <EmbeddedResource Include="..\LICENSE" Link="LICENSE" />
     <None Include="..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\NOTICE.md" Link="NOTICE.md" CopyToOutputDirectory="PreserveNewest" />

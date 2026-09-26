@@ -112,6 +112,9 @@ namespace MemoryOrb
             var github = new MenuItem { Header = "GitHub 项目源码 ↗", ToolTip = Branding.GitHubRepository };
             github.Click += (s, e) => OpenGitHub();
             menu.Items.Add(github);
+            var support = new MenuItem { Header = "打赏作者 · 自愿支持" };
+            support.Click += (s, e) => ShowSupport();
+            menu.Items.Add(support);
             var download = new MenuItem { Header = "更新与下载 ↗", ToolTip = Branding.DownloadPage };
             download.Click += (s, e) => OpenDownloadPage();
             menu.Items.Add(download);
@@ -427,6 +430,40 @@ namespace MemoryOrb
             catch (Exception ex) { App.WriteError(ex); if (!closing) ShowBadge("位置或设置未能保存", true); }
         }
 
+        private void ShowSupport()
+        {
+            CreateSupportWindow().ShowDialog();
+        }
+
+        private Window CreateSupportWindow()
+        {
+            var dialog = new Window
+            {
+                Title = "打赏作者 · 内存卫士", Owner = this,
+                Width = 480, Height = 740,
+                MaxHeight = SystemParameters.WorkArea.Height,
+                MaxWidth = SystemParameters.WorkArea.Width,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                ResizeMode = ResizeMode.CanResize, Background = Brushes.White
+            };
+            var panel = new StackPanel { Margin = new Thickness(20) };
+            panel.Children.Add(new TextBlock { Text = "感谢支持宋域强", FontSize = 22, FontWeight = FontWeights.SemiBold });
+            panel.Children.Add(new TextBlock { Text = "自愿支持，感谢鼓励。软件永久免费，\n不打赏也可使用全部功能。", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 14) });
+            var image = new Image
+            {
+                Source = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/EarthGuardian;component/Assets/wechat-support.jpg")),
+                Stretch = Stretch.Uniform, MaxWidth = 400,
+                ToolTip = "使用微信扫一扫，自愿选择金额"
+            };
+            panel.Children.Add(image);
+            panel.Children.Add(new TextBlock { Text = "使用微信扫一扫，请核对收款人后自愿选择金额。", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 12), Foreground = Brushes.DimGray });
+            var close = new Button { Content = "关闭", Padding = new Thickness(16, 6, 16, 6), IsCancel = true };
+            close.Click += (s, e) => dialog.Close();
+            panel.Children.Add(close);
+            dialog.Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+            return dialog;
+        }
+
         private void ShowAbout()
         {
             CreateAboutWindow().ShowDialog();
@@ -445,6 +482,9 @@ namespace MemoryOrb
             var githubButton = new Button { Content = "GitHub · syq10086 / MemoryGuardian ↗", ToolTip = Branding.GitHubRepository, Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 0, 0, 8) };
             githubButton.Click += (s, e) => OpenGitHub();
             panel.Children.Add(githubButton);
+            var supportButton = new Button { Content = "打赏作者 · 自愿支持", Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 0, 0, 8) };
+            supportButton.Click += (s, e) => ShowSupport();
+            panel.Children.Add(supportButton);
             var downloadButton = new Button { Content = "更新与下载 · 内存卫士 ↗", ToolTip = Branding.DownloadPage, Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 0, 0, 6) };
             downloadButton.Click += (s, e) => OpenDownloadPage();
             panel.Children.Add(downloadButton);

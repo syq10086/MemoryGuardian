@@ -200,7 +200,7 @@ internal class Program
             var request = Branding.CreateHomepageRequest();
             Check(request.UseShellExecute && request.FileName == "https://blog.csdn.net/syq10086?type=blog", "author homepage opens exact URL in default browser");
             Check(window.Title.StartsWith("内存卫士"), "new product name is displayed");
-            Check(Branding.Version == "0.6.1", "about version comes from built assembly");
+            Check(Branding.Version == "0.6.2", "about version comes from built assembly");
             var downloadRequest = Branding.CreateDownloadRequest();
             Check(downloadRequest.UseShellExecute && downloadRequest.FileName == "https://www.xiaopuwa.com/memory-guardian/", "update link opens product download page in default browser");
             bool hasDownload = false;
@@ -217,6 +217,11 @@ internal class Program
             }
             Check(aboutWindow.Title == "关于内存卫士" && aboutDownload && aboutVersion, "about dialog includes renamed title, actual version and update button");
             aboutWindow.Close();
+            var supportWindow = (Window)typeof(OrbWindow).GetMethod("CreateSupportWindow", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(window, null);
+            var supportPanel = (StackPanel)((ScrollViewer)supportWindow.Content).Content;
+            var supportImage = (Image)supportPanel.Children[2];
+            Check(supportImage.Source.Width > 1000 && supportImage.Source.Height > 1500, "support dialog loads full original payment image from embedded resources");
+            supportWindow.Close();
             var earthView = (EarthView)button.Template.FindName("Earth", button);
             Check(MemoryPressurePalette.Band(0) == 0 && MemoryPressurePalette.Band(50) == 0 && MemoryPressurePalette.Band(95) == 20 && MemoryPressurePalette.Band(100) == 20, "pressure palette endpoints remain blue below 50 and red from 95 percent");
             int previousBand = -1;

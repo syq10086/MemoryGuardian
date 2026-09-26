@@ -1,9 +1,9 @@
 ; Earth Guardian installer. SPDX-License-Identifier: GPL-3.0-only
 #ifndef AppVersion
-  #define AppVersion "0.6.1"
+  #define AppVersion "0.6.2"
 #endif
 #ifndef SourceDir
-  #define SourceDir "..\artifacts\earth-release-0.6.1"
+  #define SourceDir "..\artifacts\earth-release-0.6.2"
 #endif
 #ifndef OutputDir
   #define OutputDir "..\artifacts\installer"

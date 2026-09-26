@@ -1,3 +1,5 @@
+Version 0.6.2, modified 2026-09-27 by 宋域强: added voluntary support dialog and author-supplied WeChat payment image.
+
 Version 0.6.1, modified 2026-09-27 by 宋域强: added GitHub links and migrated the download website to memory-guardian.
 
 # 内存卫士 (Memory Guardian; formerly 地球卫士) — Attribution and modification notice
