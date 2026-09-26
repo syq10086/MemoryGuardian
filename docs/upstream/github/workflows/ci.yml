@@ -1,0 +1,270 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'src/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: windows-latest
+    outputs:
+      app_version: ${{ steps.version.outputs.app_version }}
+      unsigned_artifact_name: winmemorycleaner-${{ steps.version.outputs.app_version }}
+      test_artifact_name: ${{ steps.determine_artifact.outputs.name }}
+      src_changed: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check_files.outputs.any_changed == 'true' }}
+
+    steps:
+      - name: Check for src file changes
+        id: check_files
+        if: github.event_name == 'pull_request'
+        uses: tj-actions/changed-files@v46
+        with:
+          files: src/**
+
+      - name: Checkout code
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check_files.outputs.any_changed == 'true'
+        uses: actions/checkout@v4
+
+      - name: Cache NuGet packages
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check_files.outputs.any_changed == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-
+
+      - name: Setup MSBuild
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check_files.outputs.any_changed == 'true'
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check_files.outputs.any_changed == 'true'
+        shell: pwsh
+        run: nuget restore src\WinMemoryCleaner.sln
+
+      - name: Build solution
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check_files.outputs.any_changed == 'true'
+        shell: pwsh
+        run: msbuild src\WinMemoryCleaner.sln /m /p:Configuration=Release /p:Platform="Any CPU"
+
+      - name: Run Tests
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check_files.outputs.any_changed == 'true'
+        shell: pwsh
+        run: |
+          $testAssembly = "src\bin\Release\WinMemoryCleaner.exe"  
+          $testRunner = "src\packages\NUnit.Runners.2.6.4\tools\nunit-console.exe"
+          
+          if (-Not (Test-Path $testRunner)) {
+            Write-Host "::error::Test runner not found at $testRunner"
+            exit 1
+          }
+          
+          Write-Host "Running tests..."
+          & $testRunner $testAssembly /xml:TestResults.xml
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Tests failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+
+      - name: Upload test results
+        if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check_files.outputs.any_changed == 'true')
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_number }}
+          path: TestResults.xml
+          retention-days: 30
+
+      - name: Publish test results
+        if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check_files.outputs.any_changed == 'true')
+        uses: EnricoMi/publish-unit-test-result-action/windows@v2
+        with:
+          files: TestResults.xml
+          check_name: Unit Test Results
+
+      - name: Get App Version
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check_files.outputs.any_changed == 'true'
+        id: version
+        shell: pwsh
+        run: |
+          $assemblyInfoPath = "src/Properties/AssemblyInfo.cs"
+          if (-Not (Test-Path $assemblyInfoPath)) {
+            $assemblyInfoPath = "src/Properties/AssemblyInfo.cs"
+          }
+          if (-Not (Test-Path $assemblyInfoPath)) {
+            Write-Host "::error::AssemblyInfo.cs not found"
+            exit 1
+          }
+          $assemblyInfo = Get-Content $assemblyInfoPath
+          $versionLine = $assemblyInfo | Select-String -Pattern 'AssemblyVersion\("([0-9\.]+)"\)'
+          if ($versionLine -match 'AssemblyVersion\("([0-9\.]+)"\)') {
+            $fullVersion = $matches[1]
+            if ($fullVersion -match '^(\d+\.\d+\.\d+)') {
+              $appVersion = $matches[1]
+              echo "app_version=$appVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            } else {
+              Write-Host "::error::Could not parse Major.Minor.Patch from version $fullVersion"
+              exit 1
+            }
+          } else {
+            Write-Host "::error::Could not find version in $assemblyInfoPath"
+            exit 1
+          }
+
+      - name: Upload unsigned EXE as artifact
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check_files.outputs.any_changed == 'true'
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: winmemorycleaner-${{ steps.version.outputs.app_version }}
+          path: src\bin\Release\WinMemoryCleaner.exe
+          if-no-files-found: error
+
+      - name: Submit to SignPath (Develop CI Signing)
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check_files.outputs.any_changed == 'true') && (github.repository == 'IgorMundstein/WinMemoryCleaner' && github.ref == 'refs/heads/develop')
+        id: signpath
+        uses: signpath/github-action-submit-signing-request@v1.1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: WinMemoryCleaner
+          signing-policy-slug: ci-signing
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: ./
+
+      - name: Upload signed build artifact
+        if: steps.signpath.conclusion == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: winmemorycleaner-${{ steps.version.outputs.app_version }}-signed
+          path: WinMemoryCleaner.exe
+          retention-days: 30
+
+      - name: Determine Test Artifact
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check_files.outputs.any_changed == 'true'
+        id: determine_artifact
+        shell: pwsh
+        run: |
+          if ('${{ steps.signpath.conclusion }}' -eq 'success') {
+            echo "name=winmemorycleaner-${{ steps.version.outputs.app_version }}-signed" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          } else {
+            echo "name=winmemorycleaner-${{ steps.version.outputs.app_version }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
+
+  test-ui:
+    name: UI Test on ${{ matrix.os }}
+    needs: build-and-test
+    if: needs.build-and-test.outputs.src_changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Download build artifact for testing
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-and-test.outputs.test_artifact_name }}
+
+      - name: Run UI Test
+        shell: pwsh
+        run: |
+          $appPath = ".\WinMemoryCleaner.exe"
+          $appName = "WinMemoryCleaner"
+          $screenshotPath = ".\screenshot-${{ matrix.os }}.png"
+          
+          $process = Start-Process -FilePath $appPath -PassThru
+          
+          $loops = 0
+          while ($process.MainWindowHandle -eq 0 -and $loops -lt 15) {
+            Start-Sleep -Seconds 1
+            $loops++
+          }
+          
+          if ($process.HasExited) {
+            Write-Host "::error::$appName process exited prematurely."
+            exit 1
+          }
+          
+          Add-Type -AssemblyName System.Drawing
+          Add-Type -AssemblyName System.Windows.Forms
+          $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+          $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+          $bitmap.Save($screenshotPath, [System.Drawing.Imaging.ImageFormat]::Png)
+          $graphics.Dispose()
+          $bitmap.Dispose()
+          
+          Stop-Process -Name $appName -Force
+
+      - name: Upload Screenshot Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-screenshot-${{ matrix.os }}
+          path: screenshot-${{ matrix.os }}.png
+          retention-days: 1
+
+  package-screenshots:
+    name: Package All Screenshots
+    needs: [build-and-test, test-ui]
+    if: needs.build-and-test.outputs.src_changed == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all screenshot artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ui-test-screenshot-*
+          path: ./all-screenshots
+          merge-multiple: true
+
+      - name: List final files for verification
+        run: ls -R ./all-screenshots
+
+      - name: Upload final screenshot package
+        id: upload-screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-screenshots-${{ needs.build-and-test.outputs.app_version }}
+          path: ./all-screenshots/
+          retention-days: 30
+
+      - name: Generate Job Summary
+        if: success()
+        env:
+          ARTIFACT_URL: ${{ steps.upload-screenshots.outputs.artifact-url }}
+        run: |
+          echo "## 📸 UI Test Screenshots" >> $GITHUB_STEP_SUMMARY
+          echo "| OS | Filename |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          for f in ./all-screenshots/*.png; do
+            filename=$(basename "$f")
+            os_name="${filename#screenshot-}" 
+            os_name="${os_name%.png}"
+            echo "| $os_name | [$filename]($ARTIFACT_URL) |" >> $GITHUB_STEP_SUMMARY
+          done

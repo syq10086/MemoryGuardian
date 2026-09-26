@@ -1,0 +1,57 @@
+<Window x:Class="MemoryOrb.OrbWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:MemoryOrb"
+ Title="内存卫士" Width="180" Height="122"
+ WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True"
+ Background="Transparent" ShowInTaskbar="False" ShowActivated="False"
+ FontFamily="Microsoft YaHei UI" UseLayoutRounding="True"
+ Icon="Assets/EarthGuardian.ico">
+ <Grid x:Name="Surface">
+  <Viewbox x:Name="OrbBox" Width="88" Height="88" VerticalAlignment="Top" Margin="0,6,0,0">
+   <Button x:Name="OrbButton" Width="96" Height="96" Cursor="Hand" FocusVisualStyle="{x:Null}"
+    AutomationProperties.Name="优化内存" AutomationProperties.HelpText="单击完整清理七项内存区域；拖动移动；右键查看结果和设置。"
+    PreviewMouseLeftButtonDown="OnPointerDown" PreviewMouseMove="OnPointerMove"
+    PreviewMouseLeftButtonUp="OnPointerUp" LostMouseCapture="OnLostCapture" Click="OnKeyboardClick">
+    <Button.Template>
+     <ControlTemplate TargetType="Button">
+      <Grid>
+       <Ellipse Margin="6" Fill="#153D68" IsHitTestVisible="False">
+        <Ellipse.Effect><DropShadowEffect Color="#168EED" BlurRadius="8" ShadowDepth="1" Opacity="0.65" /></Ellipse.Effect>
+       </Ellipse>
+       <local:EarthView x:Name="Earth" Margin="6" />
+       <Ellipse Margin="7.5" Stroke="#90B8EDFF" StrokeThickness="0.8" IsHitTestVisible="False" />
+       <Ellipse x:Name="HoverRim" Margin="4" Stroke="#77D9FF" StrokeThickness="1" Opacity="0" IsHitTestVisible="False" />
+       <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" />
+       <!-- Visual layers do not accept input; this circle routes clicks, drags and
+            context-menu gestures to the owning button without covering the corners. -->
+       <Ellipse x:Name="PointerSurface" Margin="6" Fill="Transparent" />
+      </Grid>
+      <ControlTemplate.Triggers>
+       <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="HoverRim" Property="Opacity" Value="0.7" /></Trigger>
+       <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="HoverRim" Property="Opacity" Value="1" /></Trigger>
+       <Trigger Property="IsPressed" Value="True"><Setter Property="Opacity" Value="0.86" /></Trigger>
+      </ControlTemplate.Triggers>
+     </ControlTemplate>
+    </Button.Template>
+    <StackPanel Margin="0,25,0,0">
+     <TextBlock x:Name="PercentText" Text="—" Foreground="White" FontFamily="Segoe UI" FontSize="23" FontWeight="SemiBold" TextAlignment="Center">
+      <TextBlock.Effect><DropShadowEffect Color="#001528" BlurRadius="5" ShadowDepth="1" Opacity="1" /></TextBlock.Effect>
+     </TextBlock>
+     <TextBlock x:Name="StateText" Text="守护内存" Foreground="#D9F6FF" FontSize="9" TextAlignment="Center" Margin="0,-1,0,0" />
+    </StackPanel>
+   </Button>
+  </Viewbox>
+  <Viewbox x:Name="RingBox" Width="88" Height="88" VerticalAlignment="Top" Margin="0,6,0,0" IsHitTestVisible="False" Visibility="Collapsed">
+   <Grid Width="96" Height="96">
+    <Path Stroke="#B8F5FF" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+     Data="M 48,3 A 45,45 0 0 1 91,34" RenderTransformOrigin="0.5,0.5">
+     <Path.RenderTransform><RotateTransform x:Name="Spin" /></Path.RenderTransform>
+    </Path>
+   </Grid>
+  </Viewbox>
+  <Border x:Name="Badge" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+   Background="#EF102A45" BorderBrush="#605AA1C8" BorderThickness="1" CornerRadius="10" Padding="9,5" Margin="0,0,0,3" IsHitTestVisible="False">
+   <TextBlock x:Name="BadgeText" Foreground="#DDF8FF" FontSize="10" TextAlignment="Center" />
+  </Border>
+ </Grid>
+</Window>

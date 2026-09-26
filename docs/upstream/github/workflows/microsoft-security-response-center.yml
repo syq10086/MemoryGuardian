@@ -1,0 +1,190 @@
+name: Submit to Microsoft Security Response Center (MSRC)
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MSRC_CLIENT_ID: ${{ secrets.MSRC_CLIENT_ID }}
+  MSRC_CLIENT_SECRET: ${{ secrets.MSRC_CLIENT_SECRET }}
+  MSRC_TENANT_ID: ${{ secrets.MSRC_TENANT_ID }}
+  # Set to "true" if you want the workflow to fail when token acquisition fails.
+  MSRC_STRICT: ${{ vars.MSRC_STRICT || 'false' }}
+
+jobs:
+  submit-msrc:
+    name: Submit to Microsoft Security Response Center (MSRC)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Validate secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for var in MSRC_CLIENT_ID MSRC_CLIENT_SECRET MSRC_TENANT_ID; do
+            if [ -z "${!var:-}" ]; then
+              echo "::error::Missing required secret: $var"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Get latest release tag
+        id: release_tag
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: release } = await github.rest.repos.getLatestRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            core.setOutput('tag', release.tag_name);
+
+      - name: Download artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG=${{ steps.release_tag.outputs.tag }}
+          if [ -z "$TAG" ]; then
+            echo "::error::No release tag found."
+            exit 1
+          fi
+          curl -fL --retry 3 --retry-delay 5 -o WinMemoryCleaner.exe \
+            "https://github.com/${{ github.repository }}/releases/download/${TAG}/WinMemoryCleaner.exe"
+          if [ ! -s WinMemoryCleaner.exe ]; then
+            echo "::error::Downloaded file is missing or empty."
+            exit 1
+          fi
+
+      - name: Acquire MSRC token (try v1 then v2)
+        id: msrc_token
+        env:
+          MSRC_CLIENT_ID: ${{ env.MSRC_CLIENT_ID }}
+          MSRC_CLIENT_SECRET: ${{ env.MSRC_CLIENT_SECRET }}
+          MSRC_TENANT_ID: ${{ env.MSRC_TENANT_ID }}
+          MSRC_STRICT: ${{ env.MSRC_STRICT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          have_token=0
+          admin_consent_url="https://login.microsoftonline.com/$MSRC_TENANT_ID/v2.0/adminconsent?client_id=$MSRC_CLIENT_ID&redirect_uri=https%3A%2F%2Flocalhost%2F&scope=https%3A%2F%2Fapi.msrc.microsoft.com%2F.default&state=msrc"
+
+          # v1: resource param
+          TOKEN_RESPONSE=$(curl -sS -X POST \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "client_id=$MSRC_CLIENT_ID" \
+            -d "client_secret=$MSRC_CLIENT_SECRET" \
+            -d "grant_type=client_credentials" \
+            -d "resource=https://api.msrc.microsoft.com" \
+            "https://login.microsoftonline.com/$MSRC_TENANT_ID/oauth2/token") || true
+
+          echo "Raw token response (v1): $TOKEN_RESPONSE"
+          TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
+
+          if [ -z "$TOKEN" ]; then
+            ERR=$(echo "$TOKEN_RESPONSE" | jq -r '.error // empty')
+            ERR_DESC=$(echo "$TOKEN_RESPONSE" | jq -r '.error_description // empty')
+            [ -n "$ERR$ERR_DESC" ] && echo "::warning::v1 token attempt failed${ERR:+: $ERR}${ERR_DESC:+ - $ERR_DESC}"
+
+            # v2: scope=.default
+            TOKEN_RESPONSE=$(curl -sS -X POST \
+              -H "Content-Type: application/x-www-form-urlencoded" \
+              -d "client_id=$MSRC_CLIENT_ID" \
+              -d "client_secret=$MSRC_CLIENT_SECRET" \
+              -d "grant_type=client_credentials" \
+              -d "scope=https://api.msrc.microsoft.com/.default" \
+              "https://login.microsoftonline.com/$MSRC_TENANT_ID/oauth2/v2.0/token") || true
+
+            echo "Raw token response (v2): $TOKEN_RESPONSE"
+            TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
+          fi
+
+          if [ -n "$TOKEN" ]; then
+            echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+            echo "::notice::MSRC token acquired successfully."
+          else
+            echo "token=" >> "$GITHUB_OUTPUT"
+            echo "::warning::MSRC token not acquired. This usually means the MSRC Report API hasn't been enabled/consented in your tenant yet or the tenant ID is wrong."
+            {
+              echo "### MSRC token acquisition skipped"
+              echo
+              echo "- Tenant: $MSRC_TENANT_ID"
+              echo "- Client ID: $MSRC_CLIENT_ID"
+              echo "- If you see AADSTS500011, a tenant admin must grant consent to the MSRC Report API for this app registration."
+              echo "- Admin consent link:"
+              echo "$admin_consent_url"
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            if [ "${MSRC_STRICT,,}" = "true" ]; then
+              echo "::error::Failing because MSRC_STRICT is true."
+              exit 1
+            fi
+          fi
+
+      - name: Submit to Microsoft Security Response Center (MSRC)
+        id: msrc_submit
+        if: ${{ steps.msrc_token.outputs.token != '' }}
+        env:
+          MSRC_TOKEN: ${{ steps.msrc_token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESPONSE=$(curl --silent -w "HTTPSTATUS:%{http_code}" -X POST \
+            "https://api.msrc.microsoft.com/report/v3.0/report/file" \
+            -H "Authorization: Bearer $MSRC_TOKEN" \
+            -H "Accept: application/json" \
+            -F "file=@WinMemoryCleaner.exe" \
+            -F "comment=Automated release submission via GitHub Actions")
+
+          BODY=$(echo "$RESPONSE" | sed -e 's/HTTPSTATUS\:.*//g')
+          STATUS=$(echo "$RESPONSE" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+
+          echo "$BODY" > msrc_response.json
+
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
+            echo "::notice::Submission successful."
+            REPORT_ID=$(jq -r '.id // empty' msrc_response.json)
+            if [ -n "$REPORT_ID" ]; then
+              echo "report_id=$REPORT_ID" >> "$GITHUB_OUTPUT"
+              echo "::notice::Report ID: $REPORT_ID"
+            fi
+          else
+            ERR_MSG=$(jq -r '.error.message // .message // empty' msrc_response.json)
+            if [ -n "$ERR_MSG" ]; then
+              echo "::error::MSRC response error (status $STATUS): $ERR_MSG"
+            else
+              echo "::error::MSRC response error (status $STATUS):"
+              cat msrc_response.json
+            fi
+            exit 1
+          fi
+
+      - name: Output response summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f msrc_response.json ]; then
+            echo '### MSRC Response' >> $GITHUB_STEP_SUMMARY
+            jq . msrc_response.json >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: |
+          rm -f WinMemoryCleaner.exe msrc_response.json
+          echo "::notice::Cleanup complete"

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net481</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>EarthGuardian</AssemblyName>
+    <RootNamespace>MemoryOrb</RootNamespace>
+    <Version>0.6.0</Version>
+    <Product>内存卫士</Product>
+    <Title>内存卫士</Title>
+    <Description>内存卫士 — 3D 地球悬浮内存工具，基于 Windows Memory Cleaner</Description>
+    <Copyright>Upstream code: Igor Mundstein and contributors. GPL-3.0.</Copyright>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationManifest Condition="'$(OrbPreview)' == 'true'">preview.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\EarthGuardian.ico</ApplicationIcon>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\src\Interop\NativeMethods.cs" Link="Upstream\NativeMethods.cs" />
+    <Compile Include="..\src\Core\Structs.cs" Link="Upstream\Structs.cs" />
+    <Resource Include="Assets\EarthGuardian.ico" />
+    <Resource Include="Assets\earth-map.png" />
+    <EmbeddedResource Include="..\LICENSE" Link="LICENSE" />
+    <None Include="..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\NOTICE.md" Link="NOTICE.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,364 @@
+name: Submit to WinGet
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      run_submit:
+        description: "Submit latest release to WinGet"
+        required: false
+        type: boolean
+        default: true
+      sync_all_tags:
+        description: "Sync Tags across all existing versions in microsoft/winget-pkgs to match this repo's topics"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  FORK_REPO: ${{ github.repository_owner }}/winget-pkgs
+  UPSTREAM_REPO: microsoft/winget-pkgs
+  PACKAGE_ID: ${{ github.repository_owner }}.WinMemoryCleaner
+  DISPLAY_NAME: Windows Memory Cleaner
+  BINARY_NAME: WinMemoryCleaner
+  PUBLISHER: Igor Mundstein
+
+jobs:
+  submit:
+    name: Submit to WinGet
+    runs-on: windows-latest
+    timeout-minutes: 30
+    if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && (inputs.run_submit == true || inputs.run_submit == 'true')) }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get latest release info
+        id: get_release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: release } = await github.rest.repos.getLatestRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            const tag = release.tag_name;
+            const version = tag.startsWith('v') ? tag.substring(1) : tag;
+            core.setOutput('tag', tag);
+            core.setOutput('version', version);
+
+      - name: Validate environment and PAT
+        run: |
+          if [ -z "${{ secrets.PAT_TOKEN }}" ]; then
+            echo "::error::PAT_TOKEN secret is not set!"
+            exit 1
+          fi
+
+      - name: Check if version already exists in WinGet
+        id: check_winget
+        run: |
+          MANIFEST_URL="https://api.github.com/repos/${{ env.UPSTREAM_REPO }}/contents/manifests/i/${{ github.repository_owner }}/WinMemoryCleaner/${{ steps.get_release.outputs.version }}"
+          HTTP_CODE=$(curl -s -w "%{http_code}" -o /dev/null "$MANIFEST_URL")
+          if [ "$HTTP_CODE" -eq 200 ]; then
+            echo "::notice::Version ${{ steps.get_release.outputs.version }} already exists. Skipping."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "::notice::Version not found. Proceeding with submission."
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download release asset and compute SHA256
+        if: steps.check_winget.outputs.skip == 'false'
+        id: download
+        run: |
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.get_release.outputs.tag }}/${{ env.BINARY_NAME }}.exe"
+          curl -fL --retry 3 --retry-delay 5 -o ${{ env.BINARY_NAME }}.exe "$DOWNLOAD_URL"
+          if [ ! -f "${{ env.BINARY_NAME }}.exe" ]; then
+            echo "::error file=winget.yml::Download failed"
+            exit 1
+          fi
+          SHA256=$(sha256sum ${{ env.BINARY_NAME }}.exe | cut -d ' ' -f1)
+          echo "sha256=${SHA256}" >> $GITHUB_OUTPUT
+
+      - name: Fetch repository metadata
+        if: steps.check_winget.outputs.skip == 'false'
+        id: metadata
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: repo } = await github.rest.repos.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            core.setOutput('desc', repo.description?.trim() || "This free RAM cleaner uses native Windows features to optimize memory areas. It's a compact, portable, and smart application.");
+            core.setOutput('homepage', repo.homepage?.trim() || repo.html_url || 'https://github.com/IgorMundstein/WinMemoryCleaner');
+            core.setOutput('license', repo.license?.spdx_id || 'GPL-3.0');
+
+      - name: Build Tags from repo topics
+        if: steps.check_winget.outputs.skip == 'false'
+        id: repo_topics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.getAllTopics({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            let topics = (data.names || []).map(s => s.trim()).filter(Boolean);
+            topics = Array.from(new Set(topics));
+            topics.sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }));
+            if (topics.length > 16) {
+              const dropped = topics.slice(16);
+              topics = topics.slice(0, 16);
+              core.notice(`Dropped Tags due to 16-item schema limit: ${dropped.join(', ')}`);
+            }
+            const fs = require('fs');
+            if (topics.length) {
+              const lines = ['Tags:', ...topics.map(t => `- ${t}`)];
+              fs.writeFileSync('repo_tags.yaml', lines.join('\n') + '\n');
+              core.setOutput('found', 'true');
+              core.setOutput('count', String(topics.length));
+            } else {
+              core.setOutput('found', 'false');
+              core.setOutput('count', '0');
+            }
+
+      - name: Create WinGet Manifest Files
+        if: steps.check_winget.outputs.skip == 'false'
+        id: create_manifest
+        run: |
+          set -e
+          MANIFEST_DIR="winget-manifest"
+          mkdir -p "$MANIFEST_DIR"
+          
+          cat > "${MANIFEST_DIR}/${{ env.PACKAGE_ID }}.yaml" <<EOF
+          # yaml-language-server: \$schema=https://aka.ms/winget-manifest.version.1.9.0.schema.json
+          PackageIdentifier: ${{ env.PACKAGE_ID }}
+          PackageVersion: ${{ steps.get_release.outputs.version }}
+          DefaultLocale: en-US
+          ManifestType: version
+          ManifestVersion: 1.9.0
+          EOF
+          
+          cat > "${MANIFEST_DIR}/${{ env.PACKAGE_ID }}.installer.yaml" <<EOF
+          # yaml-language-server: \$schema=https://aka.ms/winget-manifest.installer.1.9.0.schema.json
+          PackageIdentifier: ${{ env.PACKAGE_ID }}
+          PackageVersion: ${{ steps.get_release.outputs.version }}
+          InstallerType: portable
+          Installers:
+            - Architecture: neutral
+              InstallerUrl: https://github.com/${{ github.repository }}/releases/download/${{ steps.get_release.outputs.tag }}/${{ env.BINARY_NAME }}.exe
+              InstallerSha256: ${{ steps.download.outputs.sha256 }}
+              PortableCommandAlias: ${{ env.BINARY_NAME }}
+          ManifestType: installer
+          ManifestVersion: 1.9.0
+          EOF
+          
+          locale_file="${MANIFEST_DIR}/${{ env.PACKAGE_ID }}.locale.en-US.yaml"
+          current_year=$(date +'%Y')
+          
+          cat > "$locale_file" <<EOF
+          # yaml-language-server: \$schema=https://aka.ms/winget-manifest.defaultLocale.1.9.0.schema.json
+          PackageIdentifier: ${{ env.PACKAGE_ID }}
+          PackageVersion: ${{ steps.get_release.outputs.version }}
+          PackageLocale: en-US
+          Publisher: ${{ env.PUBLISHER }}
+          PublisherUrl: https://github.com/${{ github.repository_owner }}
+          PublisherSupportUrl: https://github.com/${{ github.repository }}/issues
+          Author: ${{ env.PUBLISHER }}
+          PackageName: ${{ env.DISPLAY_NAME }}
+          PackageUrl: ${{ steps.metadata.outputs.homepage }}
+          License: ${{ steps.metadata.outputs.license }}
+          LicenseUrl: https://github.com/${{ github.repository }}/blob/main/LICENSE
+          Copyright: Copyright (c) 2019 - $current_year ${{ env.PUBLISHER }}
+          ShortDescription: ${{ steps.metadata.outputs.desc }}
+          ReleaseNotesUrl: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_release.outputs.tag }}
+          EOF
+          
+          if [ "${{ steps.repo_topics.outputs.found }}" = "true" ]; then
+            cat repo_tags.yaml >> "$locale_file"
+          fi
+          
+          cat >> "$locale_file" <<EOF
+          ManifestType: defaultLocale
+          ManifestVersion: 1.9.0
+          EOF
+
+      - name: Prepare PR branch for manifest submission
+        if: steps.check_winget.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          set -e
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git clone "https://x-access-token:${{ env.GH_TOKEN }}@github.com/${{ env.FORK_REPO }}.git" fork-winget
+          cd fork-winget
+          git remote add upstream "https://github.com/${{ env.UPSTREAM_REPO }}.git"
+          git fetch upstream --depth=1
+          base_branch=$(git remote show upstream | sed -n '/HEAD branch/s/.*: //p'); [ -z "$base_branch" ] && base_branch="master"
+          version="${{ steps.get_release.outputs.version }}"
+          branch="add/${{ env.PACKAGE_ID }}/${version}"
+          git checkout -b "$branch" "upstream/$base_branch"
+          mkdir -p "manifests/i/${{ github.repository_owner }}/WinMemoryCleaner/${version}"
+          cp ../winget-manifest/*.yaml "manifests/i/${{ github.repository_owner }}/WinMemoryCleaner/${version}/"
+          git add "manifests/i/${{ github.repository_owner }}/WinMemoryCleaner/${version}"
+          git commit -m "${{ env.PACKAGE_ID }} version ${version}"
+          git push --force origin "$branch"
+
+      - name: Create Pull Request to WinGet-Pkgs
+        if: steps.check_winget.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          set -e
+          cd fork-winget
+          gh --version
+          gh auth status -h github.com || true
+          version="${{ steps.get_release.outputs.version }}"
+          branch="add/${{ env.PACKAGE_ID }}/${version}"
+          pr_title="${{ env.PACKAGE_ID }} version ${version}"
+          pr_body="Automated submission of ${{ env.PACKAGE_ID }} version ${version}."
+          base_branch=$(gh repo view "${{ env.UPSTREAM_REPO }}" --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || echo master)
+          existing=$(gh pr list --repo "${{ env.UPSTREAM_REPO }}" --head "${{ github.repository_owner }}:$branch" --state open --json url -q '.[0].url' 2>/dev/null || true)
+          if [ -n "$existing" ]; then
+            echo "::notice::A pull request already exists: $existing"
+            exit 0
+          fi
+          set +e
+          pr_output=$(gh pr create \
+            --repo "${{ env.UPSTREAM_REPO }}" \
+            --head "${{ github.repository_owner }}:$branch" \
+            --base "$base_branch" \
+            --title "$pr_title" \
+            --body "$pr_body" 2>&1)
+          status=$?
+          echo "$pr_output"
+          set -e
+          if [ $status -ne 0 ]; then
+            if echo "$pr_output" | grep -qi "already exists"; then
+              echo "::notice::A pull request for this branch already exists."
+              exit 0
+            fi
+            echo "::error::Failed to create pull request"
+            exit 1
+          fi
+          echo "::notice::Pull request created successfully."
+
+      - name: Cleanup artifacts
+        if: always()
+        run: |
+          rm -rf fork-winget upstream-winget winget-manifest ${{ env.BINARY_NAME }}.exe repo_tags.yaml
+
+  sync_tags:
+    name: Sync Tags across existing versions
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.sync_all_tags == true || inputs.sync_all_tags == 'true') }}
+    steps:
+      - name: Validate environment and PAT
+        run: |
+          if [ -z "${{ secrets.PAT_TOKEN }}" ]; then
+            echo "::error::PAT_TOKEN secret is not set!"
+            exit 1
+          fi
+
+      - name: Build Tags from repo topics
+        id: repo_topics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.getAllTopics({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            let topics = (data.names || []).map(s => s.trim()).filter(Boolean);
+            topics = Array.from(new Set(topics));
+            topics.sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }));
+            if (topics.length > 16) {
+              const dropped = topics.slice(16);
+              topics = topics.slice(0, 16);
+              core.notice(`Dropped Tags due to 16-item schema limit: ${dropped.join(', ')}`);
+            }
+            const fs = require('fs');
+            if (topics.length) {
+              const lines = ['Tags:', ...topics.map(t => `- ${t}`)];
+              fs.writeFileSync('repo_tags.yaml', lines.join('\n') + '\n');
+              core.setOutput('found', 'true');
+            } else {
+              core.setOutput('found', 'false');
+            }
+
+      - name: Clone fork and prepare branch
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          set -e
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git clone "https://x-access-token:${{ env.GH_TOKEN }}@github.com/${{ env.FORK_REPO }}.git" fork-winget
+          cd fork-winget
+          git remote add upstream "https://github.com/${{ env.UPSTREAM_REPO }}.git"
+          git fetch upstream --depth=1
+          base_branch=$(git remote show upstream | sed -n '/HEAD branch/s/.*: //p'); [ -z "$base_branch" ] && base_branch="master"
+          git checkout -b "sync-tags/${{ github.repository_owner }}-$(date +%Y%m%d%H%M%S)" "upstream/$base_branch"
+
+          ws="${GITHUB_WORKSPACE}/repo_tags.yaml"
+          base_dir="manifests/i/${{ github.repository_owner }}/WinMemoryCleaner"
+          if [ ! -d "$base_dir" ]; then
+            echo "::notice::No package directory exists in upstream."
+            exit 0
+          fi
+
+          changed=0
+          while IFS= read -r -d '' f; do
+            awk '
+              BEGIN {skip=0}
+              /^Tags:/ {skip=1; next}
+              skip==1 && /^[A-Za-z]/ {skip=0}
+              skip==0 {print}
+            ' "$f" > "$f.nontags"
+            awk -v tags="$ws" '
+              BEGIN {inserted=0}
+              /^ManifestType:/ && inserted==0 {
+                system("cat \"" tags "\"");
+                inserted=1
+              }
+              {print}
+              END {
+                if (inserted==0) {
+                  system("cat \"" tags "\"");
+                }
+              }
+            ' "$f.nontags" > "$f.new"
+            if ! diff -q "$f" "$f.new" >/dev/null; then
+              mv "$f.new" "$f"
+              rm -f "$f.nontags"
+              changed=$((changed+1))
+            else
+              rm -f "$f.nontags" "$f.new"
+            fi
+          done < <(find "$base_dir" -mindepth 1 -maxdepth 2 -type f -name "${{ env.PACKAGE_ID }}.locale.en-US.yaml" -print0)
+
+          if [ "$changed" -eq 0 ]; then
+            echo "::notice::No files changed; exiting."
+            exit 0
+          fi
+
+          git add "$base_dir"
+          git commit -m "Sync Tags with repo topics for ${{ env.PACKAGE_ID }}"
+          git push --force origin HEAD
+
+          gh pr create \
+            --repo "${{ env.UPSTREAM_REPO }}" \
+            --head "${{ github.repository_owner }}:$(git rev-parse --abbrev-ref HEAD)" \
+            --base "$base_branch" \
+            --title "Sync Tags with repo topics for ${{ env.PACKAGE_ID }}" \
+            --body "Automated update to align Tags with repository topics."

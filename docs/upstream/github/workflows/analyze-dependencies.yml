@@ -1,0 +1,78 @@
+name: Analyze and Submit Dependencies
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/**/*.sln'
+      - 'src/**/*.csproj'
+      - 'src/**/packages.config'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/**/*.sln'
+      - 'src/**/*.csproj'
+      - 'src/**/packages.config'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  analyze-and-submit:
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('src/**/packages.config', 'src/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies and generate lock file
+        run: nuget restore src/WinMemoryCleaner.sln -UseLockFile
+
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          base: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
+          branch: auto/dependency-update
+          commit-message: "Update dependencies [auto]"
+          title: "Auto-update dependencies"
+          body: |
+            This pull request updates project dependencies automatically.
+          delete-branch: true
+
+      - name: Enable auto-merge on the PR
+        if: ${{ steps.cpr.outputs.pull-request-number }}
+        env:
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          Remove-Item Env:GITHUB_TOKEN -ErrorAction SilentlyContinue
+          gh pr merge "$env:PR_NUMBER" --squash --auto --repo "$env:GITHUB_REPOSITORY"
+        shell: pwsh
+

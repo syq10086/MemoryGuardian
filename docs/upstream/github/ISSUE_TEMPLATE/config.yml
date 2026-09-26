@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+issue_templates:
+  - name: "🐛 Bug Report"
+    description: "Report an error or feature that produces an incorrect or unexpected result."
+    template: "bug_report.yml"
+  - name: "🚀 Feature Request"
+    description: "Suggest an enhancement for this project."
+    template: "feature_request.yml"
+  - name: "❓ Question"
+    description: "Ask a question about Windows Memory Cleaner."
+    template: "question.yml"
+  - name: "🌐 Translation Request"
+    description: "Contribute a new translation or update an existing one."
+    template: "translation_request.yml"

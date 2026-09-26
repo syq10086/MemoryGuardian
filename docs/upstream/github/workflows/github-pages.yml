@@ -1,0 +1,77 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - '.github/workflows/github-pages.yml'
+      - 'docs/index.html'
+      - 'docs/package.json'
+      - 'docs/tailwind.config.js'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Website
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: docs/package.json
+
+      - name: Install dependencies
+        working-directory: ./docs
+        run: npm install
+
+      - name: Build CSS with Tailwind
+        working-directory: ./docs
+        run: npm run build:css
+
+      - name: Check for Broken Links
+        uses: lycheeverse/lychee-action@v2.0.2
+        with:
+          args: >-
+            --no-progress
+            --verbose
+            --exclude api.github.com
+            --exclude https://cloudflareinsights.com
+            --exclude https://fonts.googleapis.com
+            --exclude https://fonts.gstatic.com
+            --exclude https://static.cloudflareinsights.com
+            --exclude https://www.googletagmanager.com
+            ./docs/index.html
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact for deployment
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs
+
+  deploy:
+    name: Deploy Website
+    needs: build
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

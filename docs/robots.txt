@@ -1,0 +1,2 @@
+User-agent: *
+Sitemap: https://winmemorycleaner.com/sitemap.xml

@@ -1,0 +1,32 @@
+name: "🚀 Feature Request"
+description: "Suggest an idea or enhancement for this project."
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem-description
+    attributes:
+      label: What problem are you trying to solve?
+      description: A clear and concise description of the problem or limitation you are facing. Thank you for suggesting an idea! We appreciate your feedback.
+      placeholder: "e.g., I'm always frustrated when..."
+    validations:
+      required: true
+  - type: textarea
+    id: suggested-solution
+    attributes:
+      label: What is your suggested solution?
+      description: "Describe your solution in as much detail as possible. Include any alternatives you've considered, mockups, or screenshots to help illustrate it."
+      placeholder: "You can drag and drop images here."
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: "Before submitting, please make sure you've done the following."
+      options:
+        - label: I have searched the existing issues to make sure this feature has not been requested yet.
+          required: true
+        - label: I have updated the application to its latest version.
+          required: true
+        - label: This issue is focused on a single feature or enhancement.
+          required: true

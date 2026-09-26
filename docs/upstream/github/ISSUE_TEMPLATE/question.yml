@@ -1,0 +1,21 @@
+name: "❓ Question"
+description: "Ask a question about Windows Memory Cleaner."
+labels: ["question"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: What is your question?
+      description: "Please ask your question clearly and concisely. Include as much detail as possible."
+    validations:
+      required: true
+  - type: checkboxes
+    id: steps-tried
+    attributes:
+      label: What have you tried so far?
+      description: "Let us know what you've already tried to find the answer."
+      options:
+        - label: I have searched the existing [issues](https://github.com/IgorMundstein/WinMemoryCleaner/issues) for a similar question.
+          required: true
+        - label: I have read the [README.md](https://github.com/IgorMundstein/WinMemoryCleaner/blob/main/README.md) file.
+          required: true

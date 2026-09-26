@@ -1,0 +1,26 @@
+name: Memory Guardian build and tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build
+        shell: pwsh
+        run: ./scripts/build.ps1
+      - name: Test
+        shell: pwsh
+        run: |
+          dotnet build tests/MemoryOrb.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./tests/bin/Release/net481/MemoryOrb.Tests.exe
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MemoryGuardian-windows
+          path: artifacts/earth-release-0.6.0/

@@ -1,0 +1,270 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+  workflow_dispatch:
+    inputs:
+      force_version_from_file:
+        description: 'Set to "true" to IGNORE tag bumping and use the version from AssemblyInfo.cs.'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  build:
+    name: Build and Sign for Release
+    runs-on: windows-latest
+    outputs:
+      new_tag: ${{ steps.version.outputs.new_tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Bump version tag
+        id: bump
+        if: github.event.inputs.force_version_from_file != 'true'
+        shell: pwsh
+        run: |
+          git fetch --tags
+          $currentTag = git tag --sort=-creatordate | Where-Object { $_ -match '^\d+\.\d+\.\d+$' } | Select-Object -First 1
+          if (-not $currentTag) {
+            $major = 1; $minor = 0; $patch = 0
+          } else {
+            $parts = $currentTag.Split('.')
+            $major = [int]$parts[0]
+            $minor = [int]$parts[1]
+            $patch = [int]$parts[2] + 1
+          }
+          $newTag = "$($major).$($minor).$($patch)"
+          "new_tag=$newTag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "New tag generated (from bump): $newTag"
+
+      - name: Get Version from AssemblyInfo (Force)
+        id: get_from_asm
+        if: github.event.inputs.force_version_from_file == 'true'
+        shell: pwsh
+        run: |
+          $assemblyInfoPath = "src/Properties/AssemblyInfo.cs"
+          $assemblyInfo = Get-Content $assemblyInfoPath
+          $versionLine = $assemblyInfo | Select-String -Pattern 'AssemblyVersion\("([0-9\.]+)"\)'
+          if (-not $versionLine) {
+            Write-Host "::error::Could not find AssemblyVersion in $assemblyInfoPath"
+            exit 1
+          }
+          $fullVersion = $versionLine.Matches.Groups[1].Value
+          $newTag = ($fullVersion -split '\.')[0..2] -join '.'
+          Write-Host "New tag generated (from file): $newTag"
+          "new_tag=$newTag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Set Release Version
+        id: version
+        shell: pwsh
+        run: |
+          $newTag = "${{ steps.bump.outputs.new_tag || steps.get_from_asm.outputs.new_tag }}"
+          Write-Host "Consolidated version for release: $newTag"
+          "new_tag=$newTag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Check AssemblyVersion matches new tag
+        if: github.event.inputs.force_version_from_file != 'true'
+        shell: pwsh
+        run: |
+          $expectedVersion = "${{ steps.version.outputs.new_tag }}"
+          Write-Host "Checking for expected release version: $expectedVersion"
+          $assemblyInfoPath = "src/Properties/AssemblyInfo.cs"
+          $assemblyInfo = Get-Content $assemblyInfoPath
+          $versionLine = $assemblyInfo | Select-String -Pattern 'AssemblyVersion\("([0-9\.]+)"\)'
+          if (-not $versionLine) {
+               Write-Host "::error::Could not find AssemblyVersion in $assemblyInfoPath"
+               exit 1
+          }
+          $fullVersion = $versionLine.Matches.Groups[1].Value
+          $fileVersion = ($fullVersion -split '\.')[0..2] -join '.'
+          Write-Host "Found version in file: $fileVersion (full: $fullVersion)"
+          if ($fileVersion -eq $expectedVersion) {
+               Write-Host "✅ AssemblyVersion matches the new tag."
+          } else {
+               Write-Host "::error::Version mismatch! Expected '$expectedVersion' but found '$fileVersion' in AssemblyInfo.cs. Please update the file before releasing."
+               exit 1
+          }
+
+      - name: Restore NuGet packages
+        shell: pwsh
+        run: nuget restore src\WinMemoryCleaner.sln
+
+      - name: Build solution
+        shell: pwsh
+        run: msbuild src\WinMemoryCleaner.sln /m /p:Configuration=Release /p:Platform="Any CPU"
+
+      - name: Run Unit Tests (Release Gate)
+        shell: pwsh
+        run: |
+          $testAssembly = "src\bin\Release\WinMemoryCleaner.exe"  
+          $testRunner = "src\packages\NUnit.Runners.2.6.4\tools\nunit-console.exe"
+          
+          if (-Not (Test-Path $testRunner)) {
+            Write-Host "::error::Test runner not found at $testRunner"
+            exit 1
+          }
+          
+          Write-Host "Running release gate tests..."
+          & $testRunner $testAssembly /xml:TestResults.xml
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Release aborted: Tests failed."
+            exit $LASTEXITCODE
+          }
+
+      - name: Upload EXE for signing
+        id: upload-for-signing
+        uses: actions/upload-artifact@v4
+        with:
+          name: winmemorycleaner-${{ steps.version.outputs.new_tag }}
+          path: src\bin\Release\WinMemoryCleaner.exe
+          if-no-files-found: error
+
+      - name: Submit to SignPath (release cert)
+        if: github.repository == 'IgorMundstein/WinMemoryCleaner' && github.ref == 'refs/heads/main'
+        id: signpath
+        uses: signpath/github-action-submit-signing-request@v1.1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: WinMemoryCleaner
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.upload-for-signing.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: ./
+
+      - name: Create ZIP archive from SIGNED exe
+        if: steps.signpath.conclusion == 'success'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "WinMemoryCleaner.exe", "README.md", "CHANGELOG.md" -DestinationPath WinMemoryCleaner.zip
+
+      - name: Upload release artifacts
+        if: steps.signpath.conclusion == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: winmemorycleaner-release-${{ steps.version.outputs.new_tag }}
+          path: |
+            WinMemoryCleaner.exe
+            WinMemoryCleaner.zip
+          retention-days: 30
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: winmemorycleaner-release-${{ needs.build.outputs.new_tag }}
+          path: release_artifacts
+      - name: Create Checksums
+        shell: pwsh
+        working-directory: release_artifacts
+        run: |
+          Get-FileHash -Algorithm SHA256 -Path "WinMemoryCleaner.exe", "WinMemoryCleaner.zip" | ForEach-Object {
+            $_.Hash.ToLower() + "  " + (Split-Path -Leaf $_.Path)
+          } | Out-File -FilePath "checksums.txt" -Encoding utf8
+          Write-Host "Generated checksums.txt:"; cat checksums.txt
+      - name: Create or reuse version tag
+        shell: pwsh
+        run: |
+          $tag = "${{ needs.build.outputs.new_tag }}"
+          git fetch --tags
+          if (-not (git tag -l $tag)) {
+            git config user.name "github-actions"; git config user.email "github-actions@github.com"
+            git tag $tag
+            git push origin $tag
+          } else {
+            Write-Host "Tag '$tag' already exists. Reusing..."
+          }
+      - name: Check if release already exists
+        id: check_release
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ needs.build.outputs.new_tag }}"
+          $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN" }
+          $uri = "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag"
+          try {
+            Invoke-RestMethod -Uri $uri -Headers $headers -Method GET
+            Write-Host "Release already exists for tag $tag."
+            "skip=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          } catch {
+            if ($_.Exception.Response.StatusCode.value__ -eq 404) {
+              Write-Host "No release exists for tag $tag. Proceeding."
+              "skip=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            } else {
+              Write-Error "Unexpected error: $($_.Exception.Message)"; exit 1
+            }
+          }
+      - name: Get commit date
+        id: commit_date
+        shell: pwsh
+        run: |
+          $date = (git show -s --format=%cd --date=short ${{ github.event.head_commit.id }}).Trim()
+          "date=$date" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+      - name: Format commit message for release notes
+        id: formatted_message
+        shell: pwsh
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          $msg = @()
+          foreach ($line in $env:COMMIT_MESSAGE -split "`n") { $msg += "- $line" }
+          $body = $msg -join "`n"
+          "body<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "$body" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+      - name: Upload GitHub release assets
+        if: steps.check_release.outputs.skip == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build.outputs.new_tag }}
+          name: ${{ needs.build.outputs.new_tag }}
+          body: |
+            **${{ steps.commit_date.outputs.date }}**
+            ${{ steps.formatted_message.outputs.body }}
+          files: |
+            release_artifacts/WinMemoryCleaner.exe
+            release_artifacts/WinMemoryCleaner.zip
+            release_artifacts/checksums.txt
+          draft: true
+          generate_release_notes: false
+      
+      - name: 🚀 Enable Verification Workflow
+        if: steps.check_release.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          Write-Host "New release created. Re-enabling the daily package verification workflow."
+          gh workflow enable verify-and-test-packages.yml
